@@ -6,21 +6,21 @@ from pydantic import BaseModel, Field
 class ServiceStatus(BaseModel):
     """Individual service status."""
 
-    name: str = Field(..., description="Service status", examples="healthy")
+    status: str = Field(..., description="Service status", example="healthy")
     message: Optional[str] = Field(
-        None, description="Service message", examples="Connected successfully"
+        None, description="Service message", example="Connected successfully"
     )
 
 
 class HealthResponse(BaseModel):
     """Health check response model."""
 
-    status: str = Field(..., description="Overall health status", examples="healthy")
-    version: str = Field(..., description="Application version", examples="0.1.0")
+    status: str = Field(..., description="Overall health status", example="healthy")
+    version: str = Field(..., description="Application version", example="0.1.0")
     environment: str = Field(
-        ..., description="Deployment environment", examples="development"
+        ..., description="Deployment environment", example="development"
     )
-    service_name: str = Field(..., description="Service identifier", examples="rag-api")
+    service_name: str = Field(..., description="Service identifier", example="rag-api")
     services: Optional[Dict[str, ServiceStatus]] = Field(
         None, description="Detailed status of individual services"
     )
