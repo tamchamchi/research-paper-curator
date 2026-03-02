@@ -3,23 +3,39 @@ import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from src.config import get_settings
+from src.db.factory import make_database
 
-# Set up logging
+from src.routers import ping
+
+# Setup logging
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
-
 logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("Starting up the application...")
-    # Perform any startup tasks here (e.g., connect to databases, initialize resources)
+    """Week 1: Simplified lifespan for learning purposes."""
+    logger.info("Starting RAG API...")
+
+    # Initialize settings and database (Week 1 essentials)
+    settings = get_settings()
+    app.state.settings = settings
+    print(f"Loaded settings: {settings.dict()}")
+
+    database = make_database()
+    app.state.database = database
+    logger.info("Database connected")
+
+    logger.info("API ready")
     yield
-    logger.info("Shutting down the application...")
-    # Perform any cleanup tasks here (e.g., close database connections, release resources)
+
+    # Cleanup
+    database.teardown()
+    logger.info("API shutdown complete")
 
 
 app = FastAPI(
@@ -30,7 +46,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-if __name__ == "__main__":
-    import uvicorn  # type: ignore
+# Include routers
+app.include_router(ping.router)
 
-    uvicorn.run(app, port=8000, host="")
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run(app, port=8000, host="0.0.0.0")
