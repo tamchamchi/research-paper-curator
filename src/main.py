@@ -1,11 +1,16 @@
 import logging
 import os
+import sys
 from contextlib import asynccontextmanager
+from pathlib import Path
+
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from fastapi import FastAPI
+
 from src.config import get_settings
 from src.db.factory import make_database
-
 from src.routers import ping
 
 # Setup logging
