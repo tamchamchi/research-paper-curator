@@ -17,6 +17,7 @@ services:
     env_file:
       - .env
     environment:
+      - OLLAMA_HOST=http://ollama:11434
       - MYSQL_DATABASE_URL=mysql+pymysql://rag_user:rag_password@mysql:3306/rag_db
     networks:
       - rag-network
@@ -43,8 +44,30 @@ services:
     networks:
       - rag-network
 
+  ollama:
+    image: ollama/ollama:0.11.2
+    container_name: rag-ollama
+    ports:
+      - "11434:11434"
+    deploy:
+      resources:
+        reservations:           # Optional: specify resource reservations
+          devices:     
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - rag-network      
+
 volumes:
   mysql_data:
+  ollama_data:
 
 networks:
   rag-network:
