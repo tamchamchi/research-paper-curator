@@ -22,10 +22,26 @@ class Settings(DefaultSettings):
     service_name: str = "rag-api"
 
     # MySQL configuration
-    mysql_database_url: str = "mysql+pymysql://rag_user:rag_password@localhost:3306/rag_db"
+    mysql_database_url: str = (
+        "mysql+pymysql://rag_user:rag_password@localhost:3306/rag_db"
+    )
     mysql_echo_sql: bool = False
     mysql_pool_size: int = 20
     mysql_max_overflow: int = 0
+
+    # Ollama configuration
+    ollama_host: str = "http://localhost:11434"
+    ollama_models: Union[str, List[str]] = Field(default=["llama3.2:1b", "gpt-oss:20b"])
+    ollama_default_model: str = "llama3.2:1b"
+    ollama_timeout: int = 300  # 5 minutes for larger models operations
+
+    @field_validator("ollama_models", mode="before")
+    @classmethod
+    def validate_ollama_models(cls, v):
+        """Parse comma-separated string of models into a list."""
+        if isinstance(v, str):
+            return [model.strip() for model in v.split(",")]
+        return v
 
 
 def get_settings() -> Settings:
