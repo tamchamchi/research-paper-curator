@@ -41,7 +41,7 @@ class ArxivSettings(BaseConfigSettings):
     rate_limit_delay: float = 3.0  # seconds between API calls to respect rate limits
     timeout_seconds: int = 30  # timeout for API requests
     max_results: int = 10  # maximum number of results to fetch per query
-    search_categories: str = "cs.AI"
+    search_category: str = "cs.AI"
     download_max_retries: int = 3
     download_retry_delay_base: float = 5.0
     max_concurrent_downloads: int = 5

@@ -73,7 +73,8 @@ class MySQLDatabase(BaseDatabase):
             Base.metadata.create_all(self.engine)
 
             # Check if any new tables were created
-            new_tables = set(inspector.get_table_names()) - set(existing_tables)
+            current_tables = set(inspector.get_table_names())
+            new_tables = current_tables - set(existing_tables)
 
             if new_tables:
                 logger.info(f"Created new tables: {', '.join(new_tables)}")
@@ -83,7 +84,7 @@ class MySQLDatabase(BaseDatabase):
             logger.info("MySQL database startup completed successfully")
             assert self.engine is not None
             logger.info(f"Database: {self.engine.url.database}")
-            logger.info(f"Total tables: {', '.join(new_tables)}")
+            logger.info(f"Total tables: {', '.join(current_tables)}")
             logger.info("Database connection established and tables are ready")
 
         except Exception as e:

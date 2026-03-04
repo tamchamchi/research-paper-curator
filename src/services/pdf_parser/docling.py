@@ -171,7 +171,7 @@ class DoclingParser:
                 figures=[],  # Removed: basic metadata not useful
                 tables=[],  # Removed: basic metadata not useful
                 raw_text=doc.export_to_text(),
-                references=[],
+                references=[],  # Removed: basic metadata not useful
                 parser_used=ParserType.DOCLING,
                 metadata={
                     "source": "docling",
