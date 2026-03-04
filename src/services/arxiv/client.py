@@ -131,7 +131,7 @@ class ArxivClient:
             # Use httpx with a timeout for the API request
             async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
                 response = await client.get(url)
-                response.raise_for_status()
+                response.raise_for_status() # Will raise an exception for non-200 responses
                 xml_data = response.text
 
             papers = self._parse_response(xml_data)
@@ -236,7 +236,7 @@ class ArxivClient:
             logger.error(f"Failed to fetch papers from arXiv: {e}")
             raise ArxivAPIException(f"Unexpected error fetching papers from arXiv: {e}")
 
-    async def fetch_papers_by_id(self, arxiv_id: str) -> Optional[ArxivPaper]:
+    async def fetch_paper_by_id(self, arxiv_id: str) -> Optional[ArxivPaper]:
         """
         Fetch a specific paper by its arXiv ID.
 
