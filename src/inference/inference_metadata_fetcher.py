@@ -31,7 +31,7 @@ async def test_metadata_fetcher():
     # Fetch papers from arXiv
     with database.get_session() as session:
         return await metadata_fetcher.fetch_and_process_papers(
-            max_results=1,
+            max_results=10,
             from_date="20260101",
             to_date="20260131",
             process_pdfs=True,
