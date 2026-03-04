@@ -1,21 +1,33 @@
 import os
+from pathlib import Path
 from typing import List, Union
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+PROJECT_ROOT = Path(__file__).parent.parent
+ENV_FILE_PATH = PROJECT_ROOT / ".env"
 
-class DefaultSettings(BaseSettings):
+
+class BaseConfigSettings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=[".env", str(ENV_FILE_PATH)],
         extra="ignore",
         frozen=True,
         env_nested_delimiter="__",
     )
 
 
-class ArxivSettings(DefaultSettings):
+class ArxivSettings(BaseConfigSettings):
     """Arxiv API client settings."""
+
+    model_config = SettingsConfigDict(
+        env_file=[".env", str(ENV_FILE_PATH)],
+        env_prefix="ARXIV__",
+        extra="ignore",
+        frozen=True,
+        case_sensitive=False,
+    )
 
     base_url: str = "http://export.arxiv.org/api/query"
     namespaces: dict = Field(
@@ -31,7 +43,9 @@ class ArxivSettings(DefaultSettings):
     max_results: int = 10  # maximum number of results to fetch per query
     search_categories: str = "cs.AI"
     download_max_retries: int = 3
-    download_retry_delay_base: float = 5.0  # base delay in seconds for retrying PDF downloads
+    download_retry_delay_base: float = 5.0
+    max_concurrent_downloads: int = 5
+    max_concurrent_parsing: int = 1
 
     @field_validator("pdf_cache_dir")
     @classmethod
@@ -40,16 +54,22 @@ class ArxivSettings(DefaultSettings):
         return v
 
 
-class PDFParserSettings(DefaultSettings):
-    """PDF parser settings."""
+class PDFParserSettings(BaseConfigSettings):
+    model_config = SettingsConfigDict(
+        env_file=[".env", str(ENV_FILE_PATH)],
+        env_prefix="PDF_PARSER__",
+        extra="ignore",
+        frozen=True,
+        case_sensitive=False,
+    )
 
     max_pages: int = 30
     max_file_size_mb: int = 20
-    do_ocr: bool = True
+    do_ocr: bool = False
     do_table_structure: bool = True
 
 
-class Settings(DefaultSettings):
+class Settings(BaseConfigSettings):
     """Application settings."""
 
     app_version: str = "0.1.0"
@@ -77,12 +97,14 @@ class Settings(DefaultSettings):
     # PDF parser settings
     pdf_parser: PDFParserSettings = Field(default_factory=PDFParserSettings)
 
-    @field_validator("ollama_models", mode="before")
+    @field_validator("mysql_database_url")
     @classmethod
-    def validate_ollama_models(cls, v):
-        """Parse comma-separated string of models into a list."""
-        if isinstance(v, str):
-            return [model.strip() for model in v.split(",")]
+    def validate_mysql_database_url(cls, v) -> str:
+        """Validate MySQL database URL format."""
+        if not v.startswith("mysql+pymysql://") or v.startswith("mysql://"):
+            raise ValueError(
+                "Database URL must start with 'mysql+pymysql://' or 'mysql://'"
+            )
         return v
 
 
