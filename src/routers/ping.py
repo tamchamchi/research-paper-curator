@@ -51,19 +51,30 @@ async def health_check(settings: SettingsDep, database: DatabaseDep) -> HealthRe
     services = {}
     overall_status = "ok"
 
-    # Test database connectivity
-    try:
+    def _check_service(name: str, check_func, *args, **kwargs):
+        """Helper to standardize service health checks."""
+        try:
+            if kwargs.get("is_async"):
+                # Handle async functions separately in the calling code
+                return check_func(*args)
+            result = check_func(*args)
+            services[name] = result
+            if result.status != "healthy":
+                nonlocal overall_status
+                overall_status = "degraded"
+        except Exception as e:
+            services[name] = ServiceStatus(status="unhealthy", message=str(e))
+            overall_status = "degraded"
+
+    # Database check
+    def _check_database():
         with database.get_session() as session:
-            # Simple query to test connection
             session.execute(text("SELECT 1"))
-            services["database"] = ServiceStatus(
-                status="healthy", message="Connected successfully"
-            )
-    except Exception as e:
-        services["database"] = ServiceStatus(
-            status="unhealthy", message=f"Connection failed: {str(e)}"
-        )
-        overall_status = "degraded"
+        return ServiceStatus(status="healthy", message="Connected successfully")
+
+
+    # Run synchronous checks
+    _check_service("database", _check_database)
 
     # Test Ollama connectivity (if OLLAMA_HOST is set)
     try:
