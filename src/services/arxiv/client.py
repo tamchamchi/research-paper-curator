@@ -58,7 +58,7 @@ class ArxivClient:
 
     @property
     def search_category(self) -> str:
-        return self._settings.search_categories
+        return self._settings.search_category
 
     async def fetch_papers(
         self,
@@ -131,7 +131,7 @@ class ArxivClient:
             # Use httpx with a timeout for the API request
             async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
                 response = await client.get(url)
-                response.raise_for_status() # Will raise an exception for non-200 responses
+                response.raise_for_status()  # Will raise an exception for non-200 responses
                 xml_data = response.text
 
             papers = self._parse_response(xml_data)
@@ -520,9 +520,9 @@ class ArxivClient:
                     async with client.stream("GET", url) as response:
                         response.raise_for_status()
                         with open(path, "wb") as f:
-                            async for chunk in response.iter_bytes():
+                            async for chunk in response.aiter_bytes():
                                 f.write(chunk)
-                logger.info(f"Successfully downloaded PDF to {path}")
+                logger.info(f"Successfully downloaded PDF to {path.name}")
                 return True
 
             except httpx.TimeoutException as e:
