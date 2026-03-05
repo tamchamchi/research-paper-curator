@@ -11,7 +11,7 @@ from fastapi import FastAPI
 
 from src.config import get_settings
 from src.db.factory import make_database
-from src.routers import ping
+from src.routers import papers, ping
 
 # Setup logging
 logging.basicConfig(
@@ -53,6 +53,7 @@ app = FastAPI(
 
 # Include routers
 app.include_router(ping.router)
+app.include_router(papers.router)
 
 
 if __name__ == "__main__":
