@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from typing import List, Union
+from typing import List, Literal, Union
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -69,12 +69,26 @@ class PDFParserSettings(BaseConfigSettings):
     do_table_structure: bool = True
 
 
+class OpenSearchSettings(BaseConfigSettings):
+    model_config = SettingsConfigDict(
+        env_file=[".env", str(ENV_FILE_PATH)],
+        env_prefix="OPENSEARCH__",
+        extra="ignore",
+        frozen=True,
+        case_sensitive=False,
+    )
+
+    host: str = "http://localhost:9200"
+    index_name: str = "arxiv-papers"
+    max_text_size: int = 1000000
+
+
 class Settings(BaseConfigSettings):
     """Application settings."""
 
     app_version: str = "0.1.0"
     debug: bool = True
-    environment: str = "development"
+    environment: Literal["development", "staging", "production"] = "development"
     service_name: str = "rag-api"
 
     # MySQL configuration
@@ -93,6 +107,9 @@ class Settings(BaseConfigSettings):
 
     # arXiv settings
     arxiv: ArxivSettings = Field(default_factory=ArxivSettings)
+
+    # OpenSearch settings
+    opensearch: OpenSearchSettings = Field(default_factory=OpenSearchSettings)
 
     # PDF parser settings
     pdf_parser: PDFParserSettings = Field(default_factory=PDFParserSettings)

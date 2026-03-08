@@ -6,6 +6,9 @@ from sqlalchemy.orm import Session
 
 from src.config import Settings
 from src.db.interfaces.base import BaseDatabase
+from src.services.arxiv.client import ArxivClient
+from src.services.opensearch.client import OpenSearchClient
+from src.services.pdf_parser.parser import PDFParserService
 
 
 @lru_cache()
@@ -32,7 +35,25 @@ def get_db_session(
         yield session
 
 
+def get_opensearch_client(request: Request) -> OpenSearchClient:
+    """Get the OpenSearch client instance from the request state."""
+    return request.app.state.opensearch_client
+
+
+def get_arxiv_client(request: Request) -> ArxivClient:
+    """Get the arXiv API client instance from the request state."""
+    return request.app.state.arxiv_client
+
+
+def get_pdf_parser(request: Request) -> PDFParserService:
+    """Get the PDF parser service instance from the request state."""
+    return request.app.state.pdf_parser
+
+
 # Dependency type aliases for better type hints
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 DatabaseDep = Annotated[BaseDatabase, Depends(get_database)]
 SessionDep = Annotated[Session, Depends(get_db_session)]
+OpenSearchDep = Annotated[OpenSearchClient, Depends(get_opensearch_client)]
+ArxivDep = Annotated[ArxivClient, Depends(get_arxiv_client)]
+PDFParserDep = Annotated[PDFParserService, Depends(get_pdf_parser)]
