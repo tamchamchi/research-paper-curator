@@ -1,3 +1,5 @@
+"""Ask endpoint for BM25 search using OpenSearch."""
+
 import logging
 
 from fastapi import APIRouter, HTTPException
@@ -27,6 +29,8 @@ async def search_papers(
             raise HTTPException(
                 status_code=503, detail="Search service is currently unavailable"
             )
+        else:
+            logger.info("OpenSearch cluster is healthy, proceeding with search")
 
         # Perform search with filters
         logger.info(

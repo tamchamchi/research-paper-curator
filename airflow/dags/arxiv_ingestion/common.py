@@ -9,6 +9,7 @@ sys.path.insert(0, "/opt/airflow")
 from src.database import make_database
 from src.services.arxiv.factory import make_arxiv_client
 from src.services.metadata_fetcher import make_metadata_fetcher
+from src.services.opensearch.factory import make_opensearch_client
 from src.services.pdf_parser.factory import make_pdf_parser_service
 
 # Setup logging
@@ -27,7 +28,7 @@ def get_cache_services() -> Tuple[Any, Any, Any, Any, Any]:
     arxiv_client = make_arxiv_client()
     pdf_parser = make_pdf_parser_service()
     database = make_database()
-    opensearch_client = None  # Placeholder for future OpenSearch client
+    opensearch_client = make_opensearch_client()
 
     # Create metadata fetcher with dependencies
     metadata_fetcher = make_metadata_fetcher(arxiv_client, pdf_parser)

@@ -32,13 +32,12 @@ class OpenSearchClient:
         self.host = host
         self.settings = settings or get_settings()
         self.client = OpenSearch(
-            hosts=[self.host],
-            http_compress=True,
+            hosts=[host],
             use_ssl=False,
             verify_certs=False,
-            ssl_assert_hostname=False,
             ssl_show_warn=False,
         )
+
         # Use configured index name, fall back to constant if not set
         self.index_name = self.settings.opensearch.index_name or ARXIV_PAPERS_INDEX
         logger.info(f"OpenSearch client initialized with host: {host}")
