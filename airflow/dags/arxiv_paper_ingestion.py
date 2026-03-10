@@ -22,11 +22,11 @@ default_args = {
 
 # Create the DAG
 dag = DAG(
-    "arxiv_paper_ingestion",
+    "arxiv_paper_ingestion_v1",
     default_args=default_args,
     description="Daily arXiv CS.AI paper pipeline: fetch → store to MySQL",
     schedule="0 6 * * 1-5",  # Every weekday at 6:00 AM
-    max_active_runs=3,
+    max_active_runs=1,
     catchup=True,
     tags=["arxiv", "ingestion", "papers"],
 )
