@@ -83,6 +83,35 @@ class OpenSearchSettings(BaseConfigSettings):
     max_text_size: int = 1000000
 
 
+class EmbeddingsSettings(BaseConfigSettings):
+    model_config = SettingsConfigDict(
+        env_file=[".env", str(ENV_FILE_PATH)],
+        env_prefix="EMBEDDINGS__",
+        extra="ignore",
+        frozen=True,
+        case_sensitive=False,
+    )
+
+    jina_api_key: str
+    dimensions: int = 1024
+    model_name: str = "jina-embeddings-v3"
+
+
+class ChunkingSettings(BaseConfigSettings):
+    model_config = SettingsConfigDict(
+        env_file=[".env", str(ENV_FILE_PATH)],
+        env_prefix="CHUNKING__",
+        extra="ignore",
+        frozen=True,
+        case_sensitive=False,
+    )
+
+    chunk_size: int = 600  # Target words per chunk
+    overlap_size: int = 100  # Words to overlap between chunks
+    min_chunk_size: int = 100  # Minimum words for a valid chunk
+    section_based: bool = True  # Use section-based chunking when available
+
+
 class Settings(BaseConfigSettings):
     """Application settings."""
 
@@ -113,6 +142,12 @@ class Settings(BaseConfigSettings):
 
     # PDF parser settings
     pdf_parser: PDFParserSettings = Field(default_factory=PDFParserSettings)
+
+    # Embeddings settings
+    embeddings: EmbeddingsSettings = Field(default_factory=EmbeddingsSettings)
+
+    # Text chunker settings
+    chunking: ChunkingSettings = Field(default_factory=ChunkingSettings)
 
     @field_validator("mysql_database_url")
     @classmethod
