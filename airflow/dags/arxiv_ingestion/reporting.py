@@ -2,7 +2,7 @@ import json
 import logging
 from datetime import datetime
 
-from .common import get_cache_services
+from .common import get_cached_services
 
 logger = logging.getLogger(__name__)
 
@@ -14,15 +14,14 @@ def generate_daily_report(**context):
     """
     logger.info("Generating daily ingestion report")
 
-    task_instance = context.get("ti")
-
-    if not task_instance:
+    ti = context.get("ti")
+    if not ti:
         logger.warning("No task instance available, generating basic report")
         return {"status": "basic_report", "message": "No task instance for XCom data"}
 
-    fetch_stats = (
-        task_instance.xcom_pull(task_ids="fetch_daily_papers", key="fetch_results")
-        or {}
+    fetch_stats = ti.xcom_pull(task_ids="fetch_daily_papers", key="fetch_results") or {}
+    hybrid_stats = (
+        ti.xcom_pull(task_ids="index_papers_hybrid", key="hybrid_index_stats") or {}
     )
 
     report = {
@@ -32,12 +31,18 @@ def generate_daily_report(**context):
             "papers_stored": fetch_stats.get("papers_stored", 0),
             "target_date": fetch_stats.get("date", "unknown"),
         },
-        "pipeline_status": "success" if fetch_stats else "partial",
+        "indexing_statistics": {
+            "papers_processed": hybrid_stats.get("papers_processed", 0),
+            "chunks_created": hybrid_stats.get("total_chunks_created", 0),
+            "chunks_indexed": hybrid_stats.get("total_chunks_indexed", 0),
+            "embeddings_generated": hybrid_stats.get("total_embeddings_generated", 0),
+        },
+        "pipeline_status": "success" if fetch_stats and hybrid_stats else "partial",
     }
 
     try:
         _arxiv_client, _pdf_parser, database, _metadata_fetcher, opensearch_client = (
-            get_cache_services()
+            get_cached_services()
         )
 
         with database.get_session() as session:
@@ -47,6 +52,34 @@ def generate_daily_report(**context):
 
             total_papers = session.query(func.count(Paper.id)).scalar()
             report["database_statistics"] = {"total_papers": total_papers}
+
+        if opensearch_client.health_check():
+            try:
+                stats_response = opensearch_client.client.indices.stats(
+                    index=opensearch_client.index_name
+                )
+
+                count_response = opensearch_client.client.count(
+                    index=opensearch_client.index_name
+                )
+
+                index_stats = stats_response["indices"][opensearch_client.index_name][
+                    "total"
+                ]
+
+                report["opensearch_statistics"] = {
+                    "index_name": opensearch_client.index_name,
+                    "document_count": count_response["count"],
+                    "index_size_mb": round(
+                        index_stats["store"]["size_in_bytes"] / (1024 * 1024), 2
+                    ),
+                }
+            except Exception as stats_error:
+                logger.error(f"Failed to get OpenSearch statistics: {stats_error}")
+                report["opensearch_statistics"] = {
+                    "index_name": opensearch_client.index_name,
+                    "error": str(stats_error),
+                }
     except Exception as e:
         logger.error(f"Failed to get statistics: {e}")
         report["error"] = str(e)
@@ -54,6 +87,6 @@ def generate_daily_report(**context):
     logger.info("Daily Ingestion Report:")
     logger.info(json.dumps(report, indent=2))
 
-    task_instance.xcom_push(key="daily_report", value=report)
+    ti.xcom_push(key="daily_report", value=report)
 
     return report

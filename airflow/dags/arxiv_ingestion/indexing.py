@@ -1,129 +1,148 @@
+import asyncio
 import logging
+from datetime import datetime, timedelta, timezone
 
-from .common import get_cache_services
+from src.db.factory import make_database
+from src.services.indexing.factory import make_hybrid_indexing_service
+from src.services.opensearch.factory import make_opensearch_client_fresh
 
 logger = logging.getLogger(__name__)
 
 
-def index_papers_to_opensearch(**context):
-    """Index papers data to OpenSearch."""
+async def _index_papers_with_chunks(papers):
+    """Async helper to index papers with chunking and embeddings."""
+    indexing_service = make_hybrid_indexing_service()
 
-    logger.info("Starting indexing of papers to OpenSearch")
+    papers_data = []
+    for paper in papers:
+        if hasattr(paper, "__dict__"):
+            paper_dict = {
+                "id": str(paper.id),
+                "arxiv_id": paper.arxiv_id,
+                "title": paper.title,
+                "authors": paper.authors,
+                "abstract": paper.abstract,
+                "categories": paper.categories,
+                "published_date": paper.published_date,
+                "raw_text": paper.raw_text,
+                "sections": paper.sections,
+            }
+        else:
+            paper_dict = paper
+        papers_data.append(paper_dict)
 
+    stats = await indexing_service.index_papers_batch(
+        papers=papers_data, replace_existing=True
+    )
+
+    return stats
+
+
+def index_papers_hybrid(**context):
+    """Index papers with chunking and vector embeddings for hybrid search.
+
+    This task:
+    1. Fetches recently processed papers from PostgreSQL
+    2. Chunks them into overlapping segments (600 words, 100 overlap)
+    3. Generates embeddings using Jina AI
+    4. Indexes chunks with embeddings into OpenSearch
+    """
     try:
-        fetch_results = context["ti"].xcom_pull(
-            task_ids="fetch_daily_papers", key="fetch_results"
-        )
+        database = make_database()
 
-        if not fetch_results:
-            logger.warning("No fetch results found in XCom. Skipping indexing.")
-            return {"status": "skipped", "message": "No papers to index"}
+        ti = context.get("ti")
 
-        papers_stored = fetch_results.get("papers_stored", 0)
-
-        if papers_stored == 0:
-            logger.info("No papers stored in database. Skipping indexing.")
-            return {
-                "status": "skipped",
-                "papers_indexed": 0,
-                "message": "No papers available for indexing",
-            }
-
-        logger.info(f"Processing {papers_stored} papers for OpenSearch indexing")
-
-        # Get services
-        _arxiv_client, _pdf_parser, database, opensearch_client, _metadata_fetcher = (
-            get_cache_services()
-        )
-
-        # Check OpenSearch connection
-        if not opensearch_client.health_check():
-            logger.error("OpenSearch is not healthy, skipping indexing")
-            return {
-                "status": "failed",
-                "papers_indexed": 0,
-                "message": "OpenSearch cluster not healthy",
-            }
-
-        indexed_count = 0
-        failed_count = 0
+        fetch_results = None
+        if ti:
+            fetch_results = ti.xcom_pull(
+                task_ids="fetch_daily_papers", key="fetch_results"
+            )
 
         with database.get_session() as session:
-            from sqlalchemy import text
+            from src.models.paper import Paper
 
-            from src.repositories.paper import PaperRepository
+            if fetch_results and fetch_results.get("papers_stored", 0) > 0:
+                from sqlalchemy import desc
 
-            paper_repo = PaperRepository(session)
+                papers = (
+                    session.query(Paper)
+                    .order_by(desc(Paper.created_at))
+                    .limit(fetch_results["papers_stored"])
+                    .all()
+                )
+            else:
+                cutoff_date = datetime.now(timezone.utc) - timedelta(days=1)
+                papers = (
+                    session.query(Paper).filter(Paper.created_at >= cutoff_date).all()
+                )
 
-            query = f"""
-                SELECT *
-                FROM papers
-                WHERE created_at >= CURRENT_DATE
-                AND created_at < CURRENT_DATE + INTERVAL 2 DAY
-                ORDER BY created_at DESC
-                LIMIT {fetch_results.get("papers_stored", 0) if fetch_results else 100}
-            """
+            if not papers:
+                logger.info("No papers to index for hybrid search")
+                return {"papers_indexed": 0, "chunks_created": 0}
 
-            result = session.execute(text(query))
-            papers = result.fetchall()
+            logger.info(f"Indexing {len(papers)} papers for hybrid search")
 
-            logger.info(f"Found {len(papers)} papers from today for indexing")
+            stats = asyncio.run(_index_papers_with_chunks(papers))
 
-            for paper in papers:
-                try:
-                    paper = paper_repo.get_by_id(paper.id)
-                    if not paper:
-                        continue
-                    paper_doc = {
-                        "arxiv_id": paper.arxiv_id,
-                        "title": paper.title,
-                        "authors": paper.authors,
-                        "abstract": paper.abstract,
-                        "categories": paper.categories,
-                        "pdf_url": paper.pdf_url,
-                        "published_date": paper.published_date.isoformat(),
-                    }
+            logger.info(
+                f"Hybrid indexing complete: {stats['papers_processed']} papers, "
+                f"{stats['total_chunks_created']} chunks created, "
+                f"{stats['total_chunks_indexed']} chunks indexed"
+            )
 
-                    # Index document to OpenSearch
-                    success = opensearch_client.index_paper(paper_doc)
+            if ti:
+                ti.xcom_push(key="hybrid_index_stats", value=stats)
 
-                    if success:
-                        indexed_count += 1
-                        logger.info(f"Successfully indexed paper: {paper.arxiv_id}")
-                    else:
-                        failed_count += 1
-                        logger.warning(f"Failed to index paper: {paper.arxiv_id}")
-
-                except Exception as e:
-                    failed_count += 1
-                    logger.error(f"Error indexing paper {paper.id}: {e}")
-        # Get final index stats
-        try:
-            final_stats = opensearch_client.get_index_stats()
-            total_docs = final_stats.get("document_count", 0) if final_stats else 0
-        except Exception:
-            total_docs = "unknown"
-
-        indexing_results = {
-            "status": "completed",
-            "papers_indexed": indexed_count,
-            "indexing_failures": failed_count,
-            "total_documents_in_index": total_docs,
-            "message": f"Indexed {indexed_count} papers, {failed_count} failures",
-        }
-
-        # Log detailed summary
-        logger.info("=" * 60)
-        logger.info("OpenSearch Indexing Summary:")
-        logger.info(f"  Papers found in DB: {len(papers)}")
-        logger.info(f"  Papers indexed: {indexed_count}")
-        logger.info(f"  Indexing failures: {failed_count}")
-        logger.info(f"  Total docs in index: {total_docs}")
-        logger.info("=" * 60)
-
-        return indexing_results
+            return stats
 
     except Exception as e:
-        error_msg = f"OpenSearch indexing failed: {str(e)}"
-        logger.error(error_msg)
-        return {"status": "error", "papers_indexed": 0, "message": error_msg}
+        logger.error(f"Failed to index papers for hybrid search: {e}")
+        raise
+
+
+def verify_hybrid_index(**context):
+    """Verify hybrid index health and get statistics."""
+    try:
+        opensearch_client = make_opensearch_client_fresh()
+
+        stats = opensearch_client.client.indices.stats(
+            index=opensearch_client.index_name
+        )
+
+        count = opensearch_client.client.count(index=opensearch_client.index_name)
+
+        paper_count_query = {
+            "aggs": {"unique_papers": {"cardinality": {"field": "arxiv_id"}}},
+            "size": 0,
+        }
+
+        paper_count_response = opensearch_client.client.search(
+            index=opensearch_client.index_name, body=paper_count_query
+        )
+
+        unique_papers = paper_count_response["aggregations"]["unique_papers"]["value"]
+
+        result = {
+            "index_name": opensearch_client.index_name,
+            "total_chunks": count["count"],
+            "unique_papers": unique_papers,
+            "avg_chunks_per_paper": (
+                count["count"] / unique_papers if unique_papers > 0 else 0
+            ),
+            "index_size_mb": stats["indices"][opensearch_client.index_name]["total"][
+                "store"
+            ]["size_in_bytes"]
+            / (1024 * 1024),
+        }
+
+        logger.info(
+            f"Hybrid index stats: {result['total_chunks']} chunks, "
+            f"{result['unique_papers']} papers, "
+            f"{result['avg_chunks_per_paper']:.1f} chunks/paper"
+        )
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Failed to verify hybrid index: {e}")
+        raise

@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 @lru_cache(maxsize=1)
-def get_cache_services() -> Tuple[Any, Any, Any, Any, Any]:
+def get_cached_services() -> Tuple[Any, Any, Any, Any, Any]:
     """Get cached service instances using lru_cache for automatic memoization.
 
     :returns: Tuple of (arxiv_client, pdf_parser, database, opensearch_client, metadata_fetcher)
@@ -34,4 +34,4 @@ def get_cache_services() -> Tuple[Any, Any, Any, Any, Any]:
     metadata_fetcher = make_metadata_fetcher(arxiv_client, pdf_parser)
 
     logger.info("Services initialized and cached successfully")
-    return arxiv_client, pdf_parser, database, opensearch_client, metadata_fetcher
+    return arxiv_client, pdf_parser, database, metadata_fetcher, opensearch_client
