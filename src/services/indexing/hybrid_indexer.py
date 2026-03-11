@@ -1,5 +1,5 @@
 import logging
-from typing import Dict
+from typing import Dict, List
 
 from src.services.embeddings.jina_client import JinaEmbeddingsClient
 from src.services.opensearch.client import OpenSearchClient
@@ -117,6 +117,8 @@ class HybridIndexingService:
                     "abstract": paper_data.get("abstract", ""),
                     "categories": paper_data.get("categories", []),
                     "published_date": paper_data.get("published_date"),
+                    "created_at": paper_data.get("created_at"),
+                    "updated_at": paper_data.get("updated_at"),
                 }
 
                 chunks_with_embeddings.append(
@@ -145,3 +147,59 @@ class HybridIndexingService:
                 "embeddings_generated": 0,
                 "errors": 1,
             }
+
+    async def index_papers_batch(
+        self, papers: List[Dict], replace_existing: bool = False
+    ) -> Dict[str, int]:
+        """Index multiple papers in batch.
+
+        :param papers: List of paper data
+        :param replace_existing: If True, delete existing chunks before indexing
+        :returns: Aggregated statistics
+        """
+        total_stats = {
+            "papers_processed": 0,
+            "total_chunks_created": 0,
+            "total_chunks_indexed": 0,
+            "total_embeddings_generated": 0,
+            "total_errors": 0,
+        }
+
+        for paper in papers:
+            arxiv_id = paper.get("arxiv_id")
+
+            # Optionally delete existing chunks
+            if replace_existing and arxiv_id:
+                self.opensearch_client.delete_paper_chunks(arxiv_id)
+
+            # Index the paper
+            stats = await self.index_paper(paper)
+
+            # Update totals
+            total_stats["papers_processed"] += 1
+            total_stats["total_chunks_created"] += stats["chunks_created"]
+            total_stats["total_chunks_indexed"] += stats["chunks_indexed"]
+            total_stats["total_embeddings_generated"] += stats["embeddings_generated"]
+            total_stats["total_errors"] += stats["errors"]
+
+        logger.info(
+            f"Batch indexing complete: {total_stats['papers_processed']} papers, "
+            f"{total_stats['total_chunks_indexed']} chunks indexed"
+        )
+
+        return total_stats
+
+    async def reindex_paper(self, arxiv_id: str, paper_data: Dict) -> Dict[str, int]:
+        """Reindex a paper by deleting old chunks and creating new ones.
+
+        :param arxiv_id: ArXiv ID of the paper
+        :param paper_data: Updated paper data
+        :returns: Indexing statistics
+        """
+        # Delete existing chunks
+        deleted = self.opensearch_client.delete_paper_chunks(arxiv_id)
+        if deleted:
+            logger.info(f"Deleted existing chunks for paper {arxiv_id}")
+
+        # Index with new data
+        return await self.index_paper(paper_data)

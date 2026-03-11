@@ -27,9 +27,14 @@ def make_hybrid_indexing_service(
         chunk_size=settings.chunking.chunk_size,
         overlap_size=settings.chunking.overlap_size,
         min_chunk_size=settings.chunking.min_chunk_size,
+        settings=settings,
     )
     embeddings_client = make_embeddings_client(settings)
     opensearch_client = make_opensearch_client_fresh(settings, host=opensearch_host)
 
     # Create indexing service
-    return HybridIndexingService(chunker=chunker, embeddings_client=embeddings_client, opensearch_client=opensearch_client)
+    return HybridIndexingService(
+        chunker=chunker,
+        embeddings_client=embeddings_client,
+        opensearch_client=opensearch_client,
+    )

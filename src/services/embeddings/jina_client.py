@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import List
 
@@ -61,6 +62,8 @@ class JinaEmbeddingsClient:
                     headers=self.headers,
                     json=request_data.model_dump(),
                 )
+                await asyncio.sleep(1.0)  # Sleep to respect rate limits
+
                 response.raise_for_status()
 
                 result = JinaEmbeddingResponse(**response.json())
