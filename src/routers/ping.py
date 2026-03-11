@@ -72,14 +72,13 @@ async def health_check(settings: SettingsDep, database: DatabaseDep) -> HealthRe
             session.execute(text("SELECT 1"))
         return ServiceStatus(status="healthy", message="Connected successfully")
 
-
     # Run synchronous checks
     _check_service("database", _check_database)
 
     # Test Ollama connectivity (if OLLAMA_HOST is set)
     try:
         ollama_client = OllamaClient(settings)
-        ollama_health = await ollama_client.check_health()
+        ollama_health = await ollama_client.health_check()
         services["ollama"] = ServiceStatus(
             status=ollama_health["status"], message=ollama_health["message"]
         )
