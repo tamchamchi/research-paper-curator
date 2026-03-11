@@ -2,32 +2,14 @@ import logging
 from contextlib import contextmanager
 from typing import Generator, Optional
 
-from pydantic import Field
-from pydantic_settings import BaseSettings
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
 from src.db.interfaces.base import BaseDatabase
+from src.config import MySQLSettings
 
 logger = logging.getLogger(__name__)
-
-
-class MySQLSettings(BaseSettings):
-    """MySQL database configuration settings."""
-
-    database_url: str = Field(
-        default="mysql+pymysql://user:password@localhost:3306/database",
-        description="MySQL connection URL",
-    )
-    echo_sql: bool = Field(default=False, description="Enable SQL query logging")
-    pool_size: int = Field(default=10, description="Database connection pool size")
-    max_overflow: int = Field(
-        default=0, description="Maximum overflow size for connection pool"
-    )
-
-    class Config:
-        env_prefix = "MYSQL_"
 
 
 Base = declarative_base()

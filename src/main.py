@@ -11,8 +11,9 @@ from fastapi import FastAPI
 
 from src.config import get_settings
 from src.db.factory import make_database
-from src.routers import papers, ping, search
+from src.routers import hybrid_search, papers, ping
 from src.services.arxiv.factory import make_arxiv_client
+from src.services.embeddings.factory import make_embeddings_service
 from src.services.opensearch.factory import make_opensearch_client
 from src.services.pdf_parser.factory import make_pdf_parser_service
 
@@ -26,7 +27,6 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Week 1: Simplified lifespan for learning purposes."""
     logger.info("Starting RAG API...")
 
     # Initialize settings and database (Week 1 essentials)
@@ -43,28 +43,33 @@ async def lifespan(app: FastAPI):
     opensearch_client = make_opensearch_client()
     app.state.opensearch_client = opensearch_client
 
-    # Verify OpenSearch connection
+    # Verify OpenSearch connectivity and create index if needed
     if opensearch_client.health_check():
-        logger.info("Connected to OpenSearch")
+        logger.info("OpenSearch connected successfully")
 
-        # Ensure index exists
-        if opensearch_client.create_index(force=False):
-            logger.info("OpenSearch index is ready")
+        # Setup hybrid index (supports all search types)
+        setup_results = opensearch_client.setup_indices(force=False)
+        if setup_results.get("hybrid_index"):
+            logger.info("Hybrid index created")
         else:
-            logger.error("Failed to create OpenSearch index")
+            logger.info("Hybrid index already exists")
 
-        # Get index statistics
-        stats = opensearch_client.get_index_stats()
-        logger.info(
-            f"OpenSearch ready: {stats.get('document_count', 0)} documents indexed"
-        )
+        # Get simple statistics
+        try:
+            stats = opensearch_client.client.count(index=opensearch_client.index_name)
+            logger.info(f"OpenSearch ready: {stats['count']} documents indexed")
+        except Exception:
+            logger.info("OpenSearch index ready (stats unavailable)")
     else:
-        logger.error("Failed to connect to OpenSearch")
+        logger.warning("OpenSearch connection failed - search features will be limited")
 
     # Initialize other services (kept for future endpoints and notebook demos)
     app.state.arxiv_client = make_arxiv_client()
     app.state.pdf_parser = make_pdf_parser_service()
-    logger.info("Services initialized: arXiv API client, PDF parser, OpenSearch")
+    app.state.embeddings_service = make_embeddings_service()
+    logger.info(
+        "Services initialized: arXiv API client, PDF parser, OpenSearch, Embeddings"
+    )
 
     logger.info("API ready")
     yield
@@ -78,15 +83,13 @@ app = FastAPI(
     title="arXiv Paper Curator API",
     description="Personal arXiv CS.AI paper curator with RAG capabilities",
     version=os.getenv("APP_VERSION", "0.1.0"),
-    root_path="/api/v1",
     lifespan=lifespan,
 )
 
 # Include routers
-app.include_router(ping.router)
-app.include_router(papers.router)
-app.include_router(search.router)
-
+app.include_router(ping.router, prefix="/api/v1")
+app.include_router(papers.router, prefix="/api/v1")
+app.include_router(hybrid_search.router, prefix="/api/v1")
 
 if __name__ == "__main__":
     import uvicorn
