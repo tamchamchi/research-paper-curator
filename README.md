@@ -113,14 +113,17 @@ curl http://localhost:8000/health
 - [x] Design OpenSearch index schema for research papers
 - [x] Index paper metadata (title, abstract) for keyword search
 - [x] Enable BM25 ranking for keyword-based retrieval
-- [ ] Implement document chunking strategy for paper full text
-- [ ] Implement embedding pipeline for document chunks
-- [ ] Integrate vector indexing for semantic search
-- [ ] Integrate indexing into the data ingestion pipeline
+- [x] Implement document chunking strategy for paper full text
+- [x] Implement embedding pipeline (Jina Embedding) for document chunks
+- [x] Integrate vector indexing for semantic search
+- [x] Integrate indexing into the data ingestion pipeline
 - [ ] Implement hybrid retrieval (BM25 + vector search)
 - [ ] Implement ranking strategies (Reciprocal Rank Fusion - RRF)
 
 ---
+## 📊 Data Exploration
+
+<div align="center"> <img src="./static/eda_dashboard.png" alt="EDA Dashboard" width="900"> <p><em>Exploratory data analysis dashboard for the ingestion and chunking pipeline.</em></p> </div>
 
 ## 🔧 Reference & Development Guide
 ### **🛠️ Technology Stack**
