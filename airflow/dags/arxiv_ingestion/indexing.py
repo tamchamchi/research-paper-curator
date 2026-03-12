@@ -26,6 +26,8 @@ async def _index_papers_with_chunks(papers):
                 "published_date": paper.published_date,
                 "raw_text": paper.raw_text,
                 "sections": paper.sections,
+                "created_at": paper.created_at,
+                "updated_at": paper.updated_at,
             }
         else:
             paper_dict = paper
