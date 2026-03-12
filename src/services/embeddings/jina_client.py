@@ -36,15 +36,16 @@ class JinaEmbeddingsClient:
         logger.info("Jina embeddings client initialized")
 
     async def embed_passages(
-        self, texts: List[str], batch_size: int = 100
+        self, texts: List[str], batch_size: int = 32
     ) -> List[List[float]]:
-        """Embed text passages for indexing.
+        """Embed text passages for indexing."""
 
-        :param texts: List of text passages to embed
-        :param batch_size: Number of texts to process in each API call
-        :returns: List of embedding vectors
-        """
-        embeddings = []
+        embeddings: List[List[float]] = []
+
+        RPM_LIMIT = 100
+        TPM_LIMIT = 100_000
+
+        min_request_interval = 60 / RPM_LIMIT  # 0.6s
 
         for i in range(0, len(texts), batch_size):
             batch = texts[i : i + batch_size]
@@ -56,28 +57,57 @@ class JinaEmbeddingsClient:
                 input=batch,
             )
 
-            try:
-                response = await self.client.post(
-                    f"{self.base_url}/embeddings",
-                    headers=self.headers,
-                    json=request_data.model_dump(),
-                )
-                await asyncio.sleep(1.0)  # Sleep to respect rate limits
+            retries = 5
 
-                response.raise_for_status()
+            for attempt in range(retries):
+                try:
+                    response = await self.client.post(
+                        f"{self.base_url}/embeddings",
+                        headers=self.headers,
+                        json=request_data.model_dump(),
+                    )
 
-                result = JinaEmbeddingResponse(**response.json())
-                batch_embeddings = [item["embedding"] for item in result.data]
-                embeddings.extend(batch_embeddings)
+                    response.raise_for_status()
 
-                logger.debug(f"Embedded batch of {len(batch)} passages")
+                    result = JinaEmbeddingResponse(**response.json())
+                    batch_embeddings = [item["embedding"] for item in result.data]
+                    embeddings.extend(batch_embeddings)
 
-            except httpx.HTTPError as e:
-                logger.error(f"Error embedding passages: {e}")
-                raise
-            except Exception as e:
-                logger.error(f"Unexpected error in embed_passages: {e}")
-                raise
+                    logger.info(f"Embedded batch of {len(batch)} passages")
+
+                    # ---- TOKEN RATE LIMIT ----
+                    usage = response.json().get("usage", {})
+                    tokens_used = usage.get("total_tokens", 0)
+
+                    token_sleep = (tokens_used / TPM_LIMIT) * 60
+                    sleep_time = max(min_request_interval, token_sleep)
+
+                    logger.info(
+                        f"Rate limit sleep: {sleep_time:.2f}s (tokens={tokens_used})"
+                    )
+
+                    await asyncio.sleep(sleep_time)
+
+                    break
+
+                except httpx.HTTPStatusError as e:
+                    if e.response.status_code == 409:
+                        wait_time = 2**attempt
+                        logger.warning(
+                            f"409 rate limit on batch {i // batch_size}, retry in {wait_time}s"
+                        )
+                        await asyncio.sleep(wait_time)
+                    else:
+                        logger.error(f"HTTP error embedding passages: {e}")
+                        raise
+
+                except httpx.HTTPError as e:
+                    logger.error(f"HTTP error embedding passages: {e}")
+                    raise
+
+                except Exception as e:
+                    logger.error(f"Unexpected error in embed_passages: {e}")
+                    raise
 
         logger.info(f"Successfully embedded {len(texts)} passages")
         return embeddings
