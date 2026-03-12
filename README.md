@@ -196,6 +196,32 @@ arxiv-paper-curator/
 
 ---
 
+## ⚠️ Common Issues & Troubleshooting
+
+This section documents common issues encountered when building and operating the research paper retrieval and RAG pipeline.
+
+Each issue includes the **problem description**, **root cause**, and **recommended solution**.
+
+---
+
+### 🔎 Issue: arXiv API rate limit errors
+
+**Problem**
+
+Metadata ingestion occasionally fails or returns incomplete results.
+
+**Why**
+
+The arXiv API enforces a strict **3-second delay between requests**.  
+Sending requests too frequently may cause throttling or temporary request failures.
+
+**Solution**
+
+Ensure the ingestion pipeline respects the official rate limit by:
+
+- enforcing a **minimum 3-second delay** between API requests
+- using an **async scheduler** to control request frequency
+- implementing **retry logic with exponential backoff** for failed requests
 
 ## 📄 License
 
