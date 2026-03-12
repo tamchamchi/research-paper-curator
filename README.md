@@ -98,6 +98,18 @@ curl http://localhost:8000/health
 
 - **Robust PDF parsing pipeline** achieving approximately **~90% parsing success rate** across ingested arXiv papers.
 
+### 💬 RAG Question Answering (Ollama)
+- **Local LLM-powered answers** using Ollama with multiple model options (`qwen3.5:0.8b`, `llama3.2:1b`), requiring no external API keys.
+- **Structured RAG prompts** that ground LLM responses strictly in retrieved paper excerpts, with arXiv citation formatting.
+- **Streaming response generation** via Server-Sent Events (SSE), delivering answers token-by-token as they are generated.
+- **Hybrid retrieval integration** combining BM25 keyword search with Jina vector embeddings for improved chunk retrieval, with automatic fallback to BM25 on embedding failure.
+
+### 🖥️ Web User Interface (Gradio)
+- **Interactive chat interface** built with Gradio, accessible at `http://localhost:7861`, for querying indexed arXiv papers using natural language.
+- **Configurable search parameters** including number of retrieved chunks (1–10), hybrid vs. keyword-only search, LLM model selection, and arXiv category filtering.
+- **Real-time streaming** that displays the LLM answer progressively as it is generated, along with search metadata (mode, chunks used, source paper links).
+- **Built-in example queries** for quick exploration of topics like transformers, CNNs, attention mechanisms, reinforcement learning, and NLP.
+
 ---
 
 ## 🗺️ Roadmap
@@ -117,10 +129,25 @@ curl http://localhost:8000/health
 - [x] Implement embedding pipeline (Jina Embedding) for document chunks
 - [x] Integrate vector indexing for semantic search
 - [x] Integrate indexing into the data ingestion pipeline
-- [ ] Implement hybrid retrieval (BM25 + vector search)
-- [ ] Implement ranking strategies (Reciprocal Rank Fusion - RRF)
+- [x] Implement hybrid retrieval (BM25 + vector search)
+- [x] Implement ranking strategies (Reciprocal Rank Fusion - RRF)
+
+### 💬 RAG & LLM Integration
+- [x] Integrate Ollama for local LLM serving
+- [x] Build RAG prompt pipeline with context from retrieved chunks
+- [x] Implement `/ask` endpoint with structured JSON responses
+- [x] Implement `/stream` endpoint with Server-Sent Events
+- [x] Support multiple LLM models (Qwen, Llama)
+- [ ] Add response evaluation and quality metrics
+- [ ] Support multi-turn conversation context
+
+### 🖥️ User Interface
+- [x] Build Gradio-based web chat interface
+- [x] Add streaming response display
+- [x] Add configurable search parameters (top_k, hybrid mode, model, categories)
 
 ---
+
 ## 📊 Data Exploration
 
 <div align="center"> <img src="./static/eda_dashboard.png" alt="EDA Dashboard" width="900"> <p><em>Exploratory data analysis dashboard for the ingestion and chunking pipeline.</em></p> </div>
@@ -161,10 +188,14 @@ arxiv-paper-curator/
 | `/api/v1/papers` | GET | List stored papers |
 | `/api/v1/papers/{id}` | GET | Get specific paper |
 | `/api/v1/search` | POST | BM25 keyword search |
+| `/api/v1/hybrid-search` | POST | Hybrid search (BM25 + vector embeddings) |
+| `/api/v1/ask` | POST | RAG question answering (returns structured response) |
+| `/api/v1/stream` | POST | Streaming RAG question answering (SSE) |
 
 **API Documentation:** Visit http://localhost:8000/docs for interactive API explorer
 
 ---
+
 
 ## 📄 License
 
