@@ -9,6 +9,7 @@ from src.dependencies import (
     EmbeddingsDep,
     OllamaDep,
     OpenSearchDep,
+    SmallTalkHandlerDep,
 )
 from src.schemas.api.ask import AskRequest, AskResponse
 
@@ -85,6 +86,7 @@ async def ask_question(
     embeddings_service: EmbeddingsDep,
     ollama_client: OllamaDep,
     domain_classifier: DomainClassifierDep,
+    small_talk_handler: SmallTalkHandlerDep,
 ) -> AskResponse:
     """
     RAG endpoint for question answering.
@@ -114,11 +116,35 @@ async def ask_question(
             logger.warning(
                 "Domain classifier not available, proceeding without classification"
             )
+            domain_label = 1  # Assume in-domain if classifier is not available
         else:
             domain_label = await domain_classifier.classify(request.query)
+            logger.info(
+                "Domain classification result for query '%s': %s",
+                request.query,
+                domain_label,
+            )
 
         if domain_label == 0:
             logger.info(f"Query classified as out-of-domain: '{request.query}'")
+            # Check if small talk handler is available
+            if not small_talk_handler:
+                logger.warning("Small talk handler is not available")
+                small_talk_response = None
+            else:
+                small_talk_response = await small_talk_handler.get_small_talk_response(
+                    request.query
+                )
+            logger.info(f"Small talk response: {small_talk_response}")
+            if small_talk_response:
+                return AskResponse(
+                    query=request.query,
+                    answer=small_talk_response,
+                    sources=[],
+                    chunks_used=0,
+                    search_mode="small_talk",
+                )
+
             return AskResponse(
                 query=request.query,
                 answer="Your question seems to be outside the scope of academic research papers. Please try asking about a research topic or paper.",
@@ -181,6 +207,8 @@ async def ask_question_stream(
     opensearch_client: OpenSearchDep,
     embeddings_service: EmbeddingsDep,
     ollama_client: OllamaDep,
+    domain_classifier: DomainClassifierDep,
+    small_talk_handler: SmallTalkHandlerDep,
 ) -> StreamingResponse:
     """Streaming RAG endpoint - returns answer as it's generated."""
 
@@ -191,6 +219,36 @@ async def ask_question_stream(
                 return
 
             await ollama_client.health_check()
+
+            # Check if domain classifier is available
+            if not domain_classifier:
+                logger.warning(
+                    "Domain classifier not available, proceeding without classification"
+                )
+                domain_label = 1
+            else:
+                domain_label = await domain_classifier.classify(request.query)
+                logger.info(
+                    "Domain classification result for streaming query '%s': %s",
+                    request.query,
+                    domain_label,
+                )
+
+            if domain_label == 0:
+                logger.info(f"Query classified as out-of-domain: '{request.query}'")
+                if small_talk_handler:
+                    small_talk_response = (
+                        await small_talk_handler.get_small_talk_response(request.query)
+                    )
+                    logger.info(f"Small talk response: {small_talk_response}")
+                    if small_talk_response:
+                        yield f"data: {json.dumps({'answer': small_talk_response, 'sources': [], 'done': True})}\n\n"
+                        return
+                else:
+                    logger.warning("Small talk handler is not available")
+
+                yield f"data: {json.dumps({'answer': 'Your question seems to be outside the scope of academic research papers. Please try asking about a research topic or paper.', 'sources': [], 'done': True})}\n\n"
+                return
 
             # Get chunks and sources using shared function
             chunks, sources, search_mode = await _prepare_chunks_and_sources(

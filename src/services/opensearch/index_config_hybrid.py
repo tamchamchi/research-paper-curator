@@ -87,3 +87,23 @@ HYBRID_RRF_PIPELINE = {
         }
     ],
 }
+
+SMALL_TALK_MAPPING = {
+    "settings": {"index.knn": True, "number_of_shards": 1, "number_of_replicas": 0},
+    "mappings": {
+        "properties": {
+            "question_vector": {
+                "type": "knn_vector",
+                "dimension": 1024,
+                "method": {
+                    "name": "hnsw",
+                    "space_type": "cosinesimil",
+                    "engine": "nmslib",
+                    "parameters": {"ef_construction": 512, "m": 16},
+                },
+            },
+            "original_query": {"type": "keyword"},
+            "small_talk_answer": {"type": "text"},
+        }
+    },
+}
