@@ -48,7 +48,7 @@ Research Paper Curator is a modular system designed to ingest, process, and quer
 ## 🏗️System Architecture
 
 <div align="center">
-  <img src="./static/system_architecture.gif" alt="System Architecture" width="800">
+  <img src="./static/system_architecture_v2.gif" alt="System Architecture" width="800">
   <p><em>End-to-end architecture of the Research Paper Curator RAG system.</em></p>
 </div>
 
@@ -131,6 +131,12 @@ curl http://localhost:8000/health
 - [x] Integrate indexing into the data ingestion pipeline
 - [x] Implement hybrid retrieval (BM25 + vector search)
 - [x] Implement ranking strategies (Reciprocal Rank Fusion - RRF)
+
+### 🌐 Domain Control
+- [x] Implement query domain checker
+- [x] Filter out-of-domain queries before RAG retrieval
+- [x] Integrate LLM-based query classification
+- [ ] Benchmark accuracy, latency, and cost of each method
 
 ### 💬 RAG & LLM Integration
 - [x] Integrate Ollama for local LLM serving
@@ -222,6 +228,28 @@ Ensure the ingestion pipeline respects the official rate limit by:
 - enforcing a **minimum 3-second delay** between API requests
 - using an **async scheduler** to control request frequency
 - implementing **retry logic with exponential backoff** for failed requests
+
+---
+
+### 🔎 Issue: Out-of-domain user queries
+
+**Problem**
+
+Users may ask questions unrelated to the indexed research papers, such as:
+
+- "Who are you?"
+- "What is the weather today?"
+
+These queries produce irrelevant retrieval results.
+
+**Why**
+
+The RAG pipeline attempts retrieval for every query without checking whether the query is related to scientific literature.
+
+**Solution**
+  - **Solution 1:** Measure the semantic similarity between the user query and retrieved documents.  
+  If the similarity score is below a predefined **threshold**, treat the query as out-of-domain and return a fallback response instead of running the full RAG pipeline.
+  - **Solution 2:** Using LLM API + Prompting.
 
 ## 📄 License
 
