@@ -176,6 +176,19 @@ class DomainClassifierSettings(BaseConfigSettings):
     model_name: str = "gemini-2.5-flash-lite"
 
 
+class SmallTalkHandlerSettings(BaseConfigSettings):
+    model_config = SettingsConfigDict(
+        env_file=[".env", str(ENV_FILE_PATH)],
+        env_prefix="SMALL_TALK_HANDLER__",
+        extra="ignore",
+        frozen=True,
+        case_sensitive=False,
+    )
+
+    index_name: str = "small-talk"
+    cosine_similarity_threshold: float = 0.8
+
+
 class Settings(BaseConfigSettings):
     """Application settings."""
 
@@ -219,6 +232,11 @@ class Settings(BaseConfigSettings):
     # Domain classifier settings
     domain_classifier: DomainClassifierSettings = Field(
         default_factory=DomainClassifierSettings
+    )
+
+    # Small talk handler settings
+    small_talk_handler: SmallTalkHandlerSettings = Field(
+        default_factory=SmallTalkHandlerSettings
     )
 
     @field_validator("mysql_database_url")

@@ -132,11 +132,9 @@ curl http://localhost:8000/health
 - [x] Implement hybrid retrieval (BM25 + vector search)
 - [x] Implement ranking strategies (Reciprocal Rank Fusion - RRF)
 
-### 🌐 Domain Control
-- [x] Implement query domain checker
-- [x] Filter out-of-domain queries before RAG retrieval
-- [x] Integrate LLM-based query classification
-- [ ] Benchmark accuracy, latency, and cost of each method
+### 🧠 Query Intent Handling
+- [x] Detect out-of-domain queries
+- [X] Handle small-talk queries
 
 ### 💬 RAG & LLM Integration
 - [x] Integrate Ollama for local LLM serving

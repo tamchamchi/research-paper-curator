@@ -12,6 +12,7 @@ from src.services.embeddings.jina_client import JinaEmbeddingsClient
 from src.services.ollama.client import OllamaClient
 from src.services.opensearch.client import OpenSearchClient
 from src.services.pdf_parser.parser import PDFParserService
+from src.services.small_talk_handle.small_talk_handler import SmallTalkHandler
 
 
 @lru_cache()
@@ -68,6 +69,11 @@ def get_domain_classifier(request: Request) -> BaseDomainClassifier:
     return request.app.state.domain_classifier
 
 
+def get_small_talk_handler(request: Request):
+    """Get the small talk handler instance from the request state."""
+    return request.app.state.small_talk_handler
+
+
 # Dependency type aliases for better type hints
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 DatabaseDep = Annotated[BaseDatabase, Depends(get_database)]
@@ -78,3 +84,4 @@ PDFParserDep = Annotated[PDFParserService, Depends(get_pdf_parser)]
 EmbeddingsDep = Annotated[JinaEmbeddingsClient, Depends(get_embeddings_service)]
 OllamaDep = Annotated[OllamaClient, Depends(get_ollama_client)]
 DomainClassifierDep = Annotated[BaseDomainClassifier, Depends(get_domain_classifier)]
+SmallTalkHandlerDep = Annotated[SmallTalkHandler, Depends(get_small_talk_handler)]

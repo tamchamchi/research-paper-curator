@@ -19,6 +19,7 @@ from src.services.embeddings.factory import make_embeddings_service
 from src.services.ollama.factory import make_ollama_client
 from src.services.opensearch.factory import make_opensearch_client
 from src.services.pdf_parser.factory import make_pdf_parser_service
+from src.services.small_talk_handle.factory import make_small_talk_handler
 
 # Setup logging
 logging.basicConfig(
@@ -66,13 +67,19 @@ async def lifespan(app: FastAPI):
     else:
         logger.warning("OpenSearch connection failed - search features will be limited")
 
+    small_talk_handler = make_small_talk_handler()
+    if small_talk_handler:
+        logger.info("Setup small talk handler index")
+        await small_talk_handler.setup_small_talk_index()
+
+    app.state.small_talk_handler = small_talk_handler
+
     # Initialize other services (kept for future endpoints and notebook demos)
     app.state.arxiv_client = make_arxiv_client()
     app.state.pdf_parser = make_pdf_parser_service()
     app.state.embeddings_service = make_embeddings_service()
     app.state.ollama_client = make_ollama_client()
     app.state.domain_classifier = make_domain_classifier()
-
     logger.info(
         "Services initialized: arXiv API client, PDF parser, OpenSearch, Embeddings, Domain Classifier"
     )
