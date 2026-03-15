@@ -25,6 +25,7 @@ dev = [
     "notebook>=7.5.4",
     "pytest>=9.0.2",
     "pytest-asyncio>=1.3.0",
+    "scikit-learn>=1.8.0",
     "types-sqlalchemy>=1.4.53.38",
 ]
 

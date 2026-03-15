@@ -251,6 +251,12 @@ The RAG pipeline attempts retrieval for every query without checking whether the
   If the similarity score is below a predefined **threshold**, treat the query as out-of-domain and return a fallback response instead of running the full RAG pipeline.
   - **Solution 2:** Using LLM API + Prompting.
 
+#### 📊 Domain Checker Benchmark
+
+| No. | Method | Accuracy | Avg. Time (s) |
+|----|--------|----------|---------------|
+| 1 | LLM Classifier (Gemini 2.5 Flash-Lite) | 1.00 | 1.0 |
+
 ## 📄 License
 
 MIT License - see [LICENSE](LICENSE) file for details.
