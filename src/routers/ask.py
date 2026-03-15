@@ -4,7 +4,12 @@ import logging
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
-from src.dependencies import EmbeddingsDep, OllamaDep, OpenSearchDep
+from src.dependencies import (
+    DomainClassifierDep,
+    EmbeddingsDep,
+    OllamaDep,
+    OpenSearchDep,
+)
 from src.schemas.api.ask import AskRequest, AskResponse
 
 logger = logging.getLogger(__name__)
@@ -79,6 +84,7 @@ async def ask_question(
     opensearch_client: OpenSearchDep,
     embeddings_service: EmbeddingsDep,
     ollama_client: OllamaDep,
+    domain_classifier: DomainClassifierDep,
 ) -> AskResponse:
     """
     RAG endpoint for question answering.
@@ -103,6 +109,25 @@ async def ask_question(
                 status_code=503, detail="LLM service is currently unavailable"
             )
 
+        # Check if domain classifier is available
+        if not domain_classifier:
+            logger.warning(
+                "Domain classifier not available, proceeding without classification"
+            )
+        else:
+            domain_label = await domain_classifier.classify(request.query)
+
+        if domain_label == 0:
+            logger.info(f"Query classified as out-of-domain: '{request.query}'")
+            return AskResponse(
+                query=request.query,
+                answer="Your question seems to be outside the scope of academic research papers. Please try asking about a research topic or paper.",
+                sources=[],
+                chunks_used=0,
+                search_mode="none",
+            )
+
+        # Run RAG flow for in-domain queries
         # Prepare chunks and sources using shared function
         chunks, sources, search_mode = await _prepare_chunks_and_sources(
             request, opensearch_client, embeddings_service

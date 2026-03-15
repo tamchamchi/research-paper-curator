@@ -163,6 +163,19 @@ class ChunkingSettings(BaseConfigSettings):
     max_combined_section_titles: int = 3
 
 
+class DomainClassifierSettings(BaseConfigSettings):
+    model_config = SettingsConfigDict(
+        env_file=[".env", str(ENV_FILE_PATH)],
+        env_prefix="DOMAIN_CLASSIFIER__",
+        extra="ignore",
+        frozen=True,
+        case_sensitive=False,
+    )
+    classifier_type: str = "gemini"
+    api_key: str
+    model_name: str = "gemini-2.5-flash-lite"
+
+
 class Settings(BaseConfigSettings):
     """Application settings."""
 
@@ -202,6 +215,11 @@ class Settings(BaseConfigSettings):
 
     # MySQL settings
     mysql: MySQLSettings = Field(default_factory=MySQLSettings)
+
+    # Domain classifier settings
+    domain_classifier: DomainClassifierSettings = Field(
+        default_factory=DomainClassifierSettings
+    )
 
     @field_validator("mysql_database_url")
     @classmethod
