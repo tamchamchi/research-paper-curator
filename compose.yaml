@@ -10,6 +10,8 @@ services:
         condition: service_healthy
       opensearch:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')\""]
       interval: 30s
@@ -22,9 +24,28 @@ services:
       - OPENSEARCH_HOST=http://opensearch:9200
       - OLLAMA_HOST=http://ollama:11434
       - MYSQL_DATABASE_URL=mysql+pymysql://rag_user:rag_password@mysql:3306/rag_db
+      - REDIS__HOST=redis
     networks:
       - rag-network
   
+  redis:
+    image: redis:7-alpine
+    container_name: rag-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - rag-network
+
   opensearch:
     image: opensearchproject/opensearch:2.19.0
     container_name: rag-opensearch
@@ -92,6 +113,7 @@ services:
       - OPENSEARCH_HOST=http://opensearch:9200
       - MYSQL_DATABASE_URL=mysql+pymysql://rag_user:rag_password@mysql:3306/rag_db
       - OLLAMA_HOST=http://ollama:11434
+      - REDIS__HOST=redis
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - airflow_logs:/opt/airflow/logs
@@ -152,6 +174,7 @@ volumes:
   opensearch_data:
   ollama_data:
   airflow_logs:
+  redis_data:
 
 networks:
   rag-network:
