@@ -102,6 +102,7 @@ class SmallTalkHandler:
     async def get_small_talk_response(self, query: str) -> Optional[str]:
         """Get a small talk response for the given query if it matches any predefined small talk questions."""
         try:
+            query = query.lower().strip()
             query_embedding = await self.embeddings_service.embed_query(query)
             search_body = {
                 "size": 1,

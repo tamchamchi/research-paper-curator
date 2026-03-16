@@ -14,6 +14,7 @@ from src.db.factory import make_database
 from src.routers import hybrid_search, papers, ping
 from src.routers.ask import ask_router, stream_router
 from src.services.arxiv.factory import make_arxiv_client
+from src.services.cache.factory import make_cache_client
 from src.services.domain_classifier.factory import make_domain_classifier
 from src.services.embeddings.factory import make_embeddings_service
 from src.services.ollama.factory import make_ollama_client
@@ -80,8 +81,10 @@ async def lifespan(app: FastAPI):
     app.state.embeddings_service = make_embeddings_service()
     app.state.ollama_client = make_ollama_client()
     app.state.domain_classifier = make_domain_classifier()
+    app.state.cache_client = make_cache_client(settings)
+
     logger.info(
-        "Services initialized: arXiv API client, PDF parser, OpenSearch, Embeddings, Domain Classifier"
+        "Services initialized: arXiv API client, PDF parser, OpenSearch, Embeddings, Domain Classifier, Cache Client"
     )
 
     logger.info("API ready")
