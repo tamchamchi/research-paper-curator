@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from src.config import Settings
 from src.db.interfaces.base import BaseDatabase
 from src.services.arxiv.client import ArxivClient
+from src.services.cache.client import CacheClient
 from src.services.domain_classifier.base import BaseDomainClassifier
 from src.services.embeddings.jina_client import JinaEmbeddingsClient
 from src.services.ollama.client import OllamaClient
@@ -74,6 +75,11 @@ def get_small_talk_handler(request: Request):
     return request.app.state.small_talk_handler
 
 
+def get_cache_client(request: Request) -> CacheClient:
+    """Get the cache client instance from the request state."""
+    return request.app.state.cache_client
+
+
 # Dependency type aliases for better type hints
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 DatabaseDep = Annotated[BaseDatabase, Depends(get_database)]
@@ -85,3 +91,4 @@ EmbeddingsDep = Annotated[JinaEmbeddingsClient, Depends(get_embeddings_service)]
 OllamaDep = Annotated[OllamaClient, Depends(get_ollama_client)]
 DomainClassifierDep = Annotated[BaseDomainClassifier, Depends(get_domain_classifier)]
 SmallTalkHandlerDep = Annotated[SmallTalkHandler, Depends(get_small_talk_handler)]
+CacheDep = Annotated[CacheClient, Depends(get_cache_client)]

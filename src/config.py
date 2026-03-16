@@ -186,8 +186,28 @@ class SmallTalkHandlerSettings(BaseConfigSettings):
     )
 
     index_name: str = "small-talk"
-    cosine_similarity_threshold: float = 0.8
+    cosine_similarity_threshold: float = 0.7
 
+
+class RedisSettings(BaseConfigSettings):
+    model_config = SettingsConfigDict(
+        env_file=[".env", str(ENV_FILE_PATH)],
+        env_prefix="REDIS__",
+        extra="ignore",
+        frozen=True,
+        case_sensitive=False,
+    )
+
+    host: str = "localhost"
+    port: int = 6379
+    password: str = ""
+    db: int = 0
+    decode_responses: bool = True
+    socket_timeout: int = 30
+    socket_connect_timeout: int = 30
+
+    # Cache settings
+    ttl_hours: int = 6  # Cache TTL in hours
 
 class Settings(BaseConfigSettings):
     """Application settings."""
@@ -238,6 +258,9 @@ class Settings(BaseConfigSettings):
     small_talk_handler: SmallTalkHandlerSettings = Field(
         default_factory=SmallTalkHandlerSettings
     )
+
+    # Redis settings
+    redis: RedisSettings = Field(default_factory=RedisSettings)
 
     @field_validator("mysql_database_url")
     @classmethod

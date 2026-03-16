@@ -1,10 +1,12 @@
 import json
 import logging
+import time
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
 from src.dependencies import (
+    CacheDep,
     DomainClassifierDep,
     EmbeddingsDep,
     OllamaDep,
@@ -43,6 +45,8 @@ async def _prepare_chunks_and_sources(
     # Retrieve top-k chunks
     logger.info(f"Retrieving top {request.top_k} chunks for query: '{request.query}'")
 
+    # Execute one unified search call (BM25 only or hybrid BM25 + vector)
+    # so both /ask and /stream share identical retrieval behavior.
     search_results = opensearch_client.search_unified(
         query=request.query,
         query_embedding=query_embedding,
@@ -73,7 +77,7 @@ async def _prepare_chunks_and_sources(
             pdf_url = f"https://arxiv.org/pdf/{arxiv_id_clean}.pdf"
             sources_set.add(pdf_url)
 
-    # Convert set back to list for consistent return type
+    # Convert set back to list for API schema compatibility.
     sources = list(sources_set)
 
     return chunks, sources, search_mode
@@ -87,6 +91,7 @@ async def ask_question(
     ollama_client: OllamaDep,
     domain_classifier: DomainClassifierDep,
     small_talk_handler: SmallTalkHandlerDep,
+    cache_client: CacheDep,
 ) -> AskResponse:
     """
     RAG endpoint for question answering.
@@ -96,6 +101,19 @@ async def ask_question(
     3. Returns structured answer with sources
     """
     try:
+        start_time = time.perf_counter()
+
+        # Check cache first
+        cache_response = None
+        if cache_client:
+            try:
+                cache_response = await cache_client.find_cached_response(request)
+                if cache_response:
+                    logger.info("Returning cached response for query")
+                    return cache_response
+            except Exception as e:
+                logger.warning(f"Cache check failed, proceeding with normal flow: {e}")
+
         # Check service availability
         if not opensearch_client.health_check():
             raise HTTPException(
@@ -111,7 +129,9 @@ async def ask_question(
                 status_code=503, detail="LLM service is currently unavailable"
             )
 
-        # Check if domain classifier is available
+        # Guard against missing classifier dependency. In that case,
+        # we default to in-domain and continue the RAG path.
+        # This keeps the endpoint available even if classification is degraded.
         if not domain_classifier:
             logger.warning(
                 "Domain classifier not available, proceeding without classification"
@@ -126,6 +146,8 @@ async def ask_question(
             )
 
         if domain_label == 0:
+            # Out-of-domain queries are answered by the small-talk handler
+            # (if available) and never sent to retrieval + LLM generation.
             logger.info(f"Query classified as out-of-domain: '{request.query}'")
             # Check if small talk handler is available
             if not small_talk_handler:
@@ -136,22 +158,31 @@ async def ask_question(
                     request.query
                 )
             logger.info(f"Small talk response: {small_talk_response}")
+
             if small_talk_response:
-                return AskResponse(
+                response = AskResponse(
                     query=request.query,
                     answer=small_talk_response,
                     sources=[],
                     chunks_used=0,
                     search_mode="small_talk",
                 )
+            else:
+                response = AskResponse(
+                    query=request.query,
+                    answer="Your question seems to be outside the scope of academic research papers. Please try asking about a research topic or paper.",
+                    sources=[],
+                    chunks_used=0,
+                    search_mode="none",
+                )
 
-            return AskResponse(
-                query=request.query,
-                answer="Your question seems to be outside the scope of academic research papers. Please try asking about a research topic or paper.",
-                sources=[],
-                chunks_used=0,
-                search_mode="none",
-            )
+            # Store in cache before returning
+            if cache_client:
+                try:
+                    await cache_client.store_response(request, response)
+                except Exception as e:
+                    logger.warning(f"Failed to store response in cache: {e}")
+            return response
 
         # Run RAG flow for in-domain queries
         # Prepare chunks and sources using shared function
@@ -161,19 +192,28 @@ async def ask_question(
 
         if not chunks:
             logger.warning(f"No chunks found for query: {request.query}")
-            return AskResponse(
+            response = AskResponse(
                 query=request.query,
                 answer="I couldn't find any relevant information in the papers to answer your question.",
                 sources=[],
                 chunks_used=0,
                 search_mode=search_mode,
             )
+            # Store in cache before returning
+            if cache_client:
+                try:
+                    await cache_client.store_response(request, response)
+                except Exception as e:
+                    logger.warning(f"Failed to store response in cache: {e}")
+            return response
 
         logger.info(
             f"Retrieved {len(chunks)} chunks, generating answer with {request.model}"
         )
 
         # Generate answer using LLM
+        # The model receives only the compact chunk payload (arxiv_id + chunk_text)
+        # built in _prepare_chunks_and_sources.
         rag_response = await ollama_client.generate_rag_answer(
             query=request.query, chunks=chunks, model=request.model
         )
@@ -190,6 +230,16 @@ async def ask_question(
         )
 
         logger.info(f"Successfully generated answer for query: '{request.query}'")
+        end_time = time.perf_counter()
+        logger.info(f"Total processing time: {end_time - start_time:.2f} seconds")
+
+        # Store in cache before returning
+        if cache_client:
+            try:
+                await cache_client.store_response(request, response)
+            except Exception as e:
+                logger.warning(f"Failed to store response in cache: {e}")
+
         return response
 
     except HTTPException:
@@ -209,11 +259,39 @@ async def ask_question_stream(
     ollama_client: OllamaDep,
     domain_classifier: DomainClassifierDep,
     small_talk_handler: SmallTalkHandlerDep,
+    cache_client: CacheDep,
 ) -> StreamingResponse:
     """Streaming RAG endpoint - returns answer as it's generated."""
 
     async def generate_stream():
         try:
+            # Check cache first
+            if cache_client:
+                try:
+                    cached_response = await cache_client.find_cached_response(request)
+                    if cached_response:
+                        logger.info("Returning cached response for streaming query")
+                        # Send metadata first (same format as non-cached)
+                        metadata_response = {
+                            "sources": cached_response.sources,
+                            "chunks_used": cached_response.chunks_used,
+                            "search_mode": cached_response.search_mode,
+                        }
+                        yield f"data: {json.dumps(metadata_response)}\n\n"
+
+                        # Emulate token streaming for cached entries so the client
+                        # can reuse the same rendering path for cached and live runs.
+                        for chunk in cached_response.answer.split():
+                            yield f"data: {json.dumps({'chunk': chunk + ' '})}\n\n"
+
+                        # Send completion signal with just the final answer
+                        yield f"data: {json.dumps({'answer': cached_response.answer, 'done': True})}\n\n"
+                        return
+                except Exception as e:
+                    logger.warning(
+                        f"Cache check failed, proceeding with normal flow: {e}"
+                    )
+
             if not opensearch_client.health_check():
                 yield f"data: {json.dumps({'error': 'Search service unavailable'})}\n\n"
                 return
@@ -236,6 +314,7 @@ async def ask_question_stream(
 
             if domain_label == 0:
                 logger.info(f"Query classified as out-of-domain: '{request.query}'")
+
                 if small_talk_handler:
                     small_talk_response = (
                         await small_talk_handler.get_small_talk_response(request.query)
@@ -243,11 +322,41 @@ async def ask_question_stream(
                     logger.info(f"Small talk response: {small_talk_response}")
                     if small_talk_response:
                         yield f"data: {json.dumps({'answer': small_talk_response, 'sources': [], 'done': True})}\n\n"
+                        if cache_client:
+                            try:
+                                response_to_cache = AskResponse(
+                                    query=request.query,
+                                    answer=small_talk_response,
+                                    sources=[],
+                                    chunks_used=0,
+                                    search_mode="small_talk",
+                                )
+                                await cache_client.store_response(
+                                    request, response_to_cache
+                                )
+                            except Exception as e:
+                                logger.warning(
+                                    f"Failed to store small talk response in cache: {e}"
+                                )
                         return
                 else:
                     logger.warning("Small talk handler is not available")
-
-                yield f"data: {json.dumps({'answer': 'Your question seems to be outside the scope of academic research papers. Please try asking about a research topic or paper.', 'sources': [], 'done': True})}\n\n"
+                full_response = "Your question seems to be outside the scope of academic research papers. Please try asking about a research topic or paper."
+                yield f"data: {json.dumps({'answer': full_response, 'sources': [], 'done': True})}\n\n"
+                if cache_client:
+                    try:
+                        response_to_cache = AskResponse(
+                            query=request.query,
+                            answer=full_response,
+                            sources=[],
+                            chunks_used=0,
+                            search_mode="none",
+                        )
+                        await cache_client.store_response(request, response_to_cache)
+                    except Exception as e:
+                        logger.warning(
+                            f"Failed to store out-of-domain response in cache: {e}"
+                        )
                 return
 
             # Get chunks and sources using shared function
@@ -260,6 +369,8 @@ async def ask_question_stream(
                 return
 
             # Send metadata first
+            # Metadata is emitted before text chunks so clients can render sources
+            # and retrieval diagnostics immediately.
             yield f"data: {json.dumps({'sources': sources, 'chunks_used': len(chunks), 'search_mode': search_mode})}\n\n"
 
             # Stream the answer
@@ -276,12 +387,27 @@ async def ask_question_stream(
                     yield f"data: {json.dumps({'answer': full_response, 'done': True})}\n\n"
                     break
 
+            if cache_client:
+                try:
+                    response_to_cache = AskResponse(
+                        query=request.query,
+                        answer=full_response,
+                        sources=sources,
+                        chunks_used=len(chunks),
+                        search_mode=search_mode,
+                    )
+                    await cache_client.store_response(request, response_to_cache)
+                except Exception as e:
+                    logger.warning(f"Failed to store response in cache: {e}")
+
         except Exception as e:
             logger.error(f"Streaming error: {e}", exc_info=True)
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
 
     return StreamingResponse(
         generate_stream(),
+        # Keep plain text for backward compatibility with existing clients
+        # that parse "data: ...\n\n" manually.
         media_type="text/plain",
         headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
     )
