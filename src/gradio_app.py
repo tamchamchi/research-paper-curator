@@ -72,7 +72,8 @@ async def stream_response(
                                 sources = data["sources"]
                                 chunks_used = data.get("chunks_used", 0)
                                 search_mode = data.get("search_mode", "unknown")
-                                continue
+                                if not data.get("done", False):
+                                    continue
 
                             # Handle streaming chunks
                             if "chunk" in data:
@@ -215,35 +216,35 @@ def create_gradio_interface():
                     "What are transformers in machine learning?",
                     3,
                     True,
-                    "qwen3.5:0.8b",
+                    "llama3.2:1b",
                     "cs.AI, cs.LG",
                 ],
                 [
                     "How do convolutional neural networks work?",
                     5,
                     True,
-                    "qwen3.5:0.8b",
+                    "llama3.2:1b",
                     "cs.CV, cs.LG",
                 ],
                 [
                     "What is attention mechanism in deep learning?",
                     4,
                     False,
-                    "qwen3.5:0.8b",
+                    "llama3.2:1b",
                     "cs.AI",
                 ],
                 [
                     "Explain reinforcement learning algorithms",
                     3,
                     True,
-                    "qwen3.5:0.8b",
+                    "llama3.2:1b",
                     "cs.LG, cs.AI",
                 ],
                 [
                     "What are the latest developments in NLP?",
                     5,
                     True,
-                    "qwen3.5:0.8b",
+                    "llama3.2:1b",
                     "cs.CL",
                 ],
             ],

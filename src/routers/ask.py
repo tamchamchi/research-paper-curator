@@ -341,23 +341,23 @@ async def ask_question_stream(
                         return
                 else:
                     logger.warning("Small talk handler is not available")
-                full_response = "Your question seems to be outside the scope of academic research papers. Please try asking about a research topic or paper."
-                yield f"data: {json.dumps({'answer': full_response, 'sources': [], 'done': True})}\n\n"
-                if cache_client:
-                    try:
-                        response_to_cache = AskResponse(
-                            query=request.query,
-                            answer=full_response,
-                            sources=[],
-                            chunks_used=0,
-                            search_mode="none",
-                        )
-                        await cache_client.store_response(request, response_to_cache)
-                    except Exception as e:
-                        logger.warning(
-                            f"Failed to store out-of-domain response in cache: {e}"
-                        )
-                return
+                    full_response = "Your question seems to be outside the scope of academic research papers. Please try asking about a research topic or paper."
+                    yield f"data: {json.dumps({'answer': full_response, 'sources': [], 'done': True})}\n\n"
+                    if cache_client:
+                        try:
+                            response_to_cache = AskResponse(
+                                query=request.query,
+                                answer=full_response,
+                                sources=[],
+                                chunks_used=0,
+                                search_mode="none",
+                            )
+                            await cache_client.store_response(request, response_to_cache)
+                        except Exception as e:
+                            logger.warning(
+                                f"Failed to store out-of-domain response in cache: {e}"
+                            )
+                    return
 
             # Get chunks and sources using shared function
             chunks, sources, search_mode = await _prepare_chunks_and_sources(
